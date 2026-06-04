@@ -4,8 +4,9 @@ import {
     Image, ActivityIndicator, FlatList, TextInput,
     Dimensions, Animated, StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 import axios from 'axios';
+import React from 'react';
 
 const { width } = Dimensions.get('window');
 const CARD_W    = (width - 48) / 2;
@@ -307,7 +308,8 @@ export default function Dashboard() {
                     <Text style={ls.title}>Pokédex</Text>
                 </View>
                 <View style={ls.headerRight}>
-                    <MiniPokeball size={44} />
+                    <Link href="/profile" asChild><TouchableOpacity style={ls.profileBtn}><Text style={ls.profileBtnText}>N</Text></TouchableOpacity></Link>
+                    <Link href="/team" asChild><TouchableOpacity style={ls.teamBtn}><Text style={ls.teamBtnText}>⚔️</Text></TouchableOpacity></Link>
                     <TouchableOpacity onPress={() => router.replace('/')} style={ls.exitBtn}>
                         <Text style={ls.exitText}>Sair</Text>
                     </TouchableOpacity>
@@ -382,7 +384,9 @@ const ls = StyleSheet.create({
     header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 12 },
     eyebrow:    { color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 2.5, marginBottom: 4 },
     title:      { color: '#e8f0fe', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
-    headerRight:{ alignItems: 'center', gap: 8 },
+    headerRight:{ alignItems: 'center', gap: 8, flexDirection: 'row' },
+    profileBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF535022', borderWidth: 2, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center' },
+    profileBtnText: { color: '#EF5350', fontSize: 18, fontWeight: '900' },
     exitBtn:    { backgroundColor: '#0f1420', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 0.5, borderColor: '#1a2235' },
     exitText:   { color: '#EF5350', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
     searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#080d14', borderRadius: 12, borderWidth: 0.5, borderColor: '#0f1e2e', marginHorizontal: 16, paddingHorizontal: 14, marginBottom: 10 },
@@ -394,4 +398,6 @@ const ls = StyleSheet.create({
     grid:       { paddingHorizontal: 16, paddingBottom: 32 },
     loadWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
     loadText:   { color: '#3a5068', fontSize: 13, letterSpacing: 1 },
+    teamBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD54F22', borderWidth: 2, borderColor: '#FFD54F', alignItems: 'center', justifyContent: 'center' },
+    teamBtnText:{ fontSize: 16 },
 });
