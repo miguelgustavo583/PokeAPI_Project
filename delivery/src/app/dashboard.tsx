@@ -144,7 +144,6 @@ const DetailScreen = ({ pokemon, onBack, onPrev, onNext }: {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={det.scroll}>
                 <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>
-                    {/* Imagem */}
                     <View style={det.hero}>
                         <Image source={{ uri: pokemon.imagem }} style={det.img} resizeMode="contain" />
                         <Text style={det.index}>#{pokemon.index}</Text>
@@ -158,13 +157,11 @@ const DetailScreen = ({ pokemon, onBack, onPrev, onNext }: {
                         </View>
                     </View>
 
-                    {/* Total */}
                     <View style={[det.totalCard, { borderColor: primary + '44' }]}>
                         <Text style={det.totalLabel}>TOTAL BASE</Text>
                         <Text style={[det.totalValue, { color: primary }]}>{totalBase}</Text>
                     </View>
 
-                    {/* Stats */}
                     <Text style={det.secLabel}>ATRIBUTOS</Text>
                     <View style={det.statsCard}>
                         {pokemon.poderes.map(p => (
@@ -172,7 +169,6 @@ const DetailScreen = ({ pokemon, onBack, onPrev, onNext }: {
                         ))}
                     </View>
 
-                    {/* Info grid */}
                     <Text style={[det.secLabel, { marginTop: 20 }]}>INFORMAÇÕES</Text>
                     <View style={det.infoGrid}>
                         {[
@@ -191,7 +187,6 @@ const DetailScreen = ({ pokemon, onBack, onPrev, onNext }: {
                         ))}
                     </View>
 
-                    {/* Navegação */}
                     <View style={det.navRow}>
                         {numIndex > 1 && (
                             <TouchableOpacity onPress={onPrev} style={[det.navBtn, { borderColor: primary + '55' }]}>
@@ -239,7 +234,7 @@ const det = StyleSheet.create({
     navText:   { fontSize: 13, fontWeight: '700' },
 });
 
-// ─── DASHBOARD — tela raiz com lista + detalhe ────────────────────────────────
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
     const router = useRouter();
 
@@ -286,7 +281,6 @@ export default function Dashboard() {
         if (next) setSelected(next);
     };
 
-    // Tela de detalhe
     if (selected) return (
         <DetailScreen
             pokemon={selected}
@@ -296,7 +290,6 @@ export default function Dashboard() {
         />
     );
 
-    // Tela da lista
     return (
         <View style={ls.screen}>
             <StatusBar barStyle="light-content" />
@@ -308,8 +301,33 @@ export default function Dashboard() {
                     <Text style={ls.title}>Pokédex</Text>
                 </View>
                 <View style={ls.headerRight}>
-                    <Link href="/profile" asChild><TouchableOpacity style={ls.profileBtn}><Text style={ls.profileBtnText}>N</Text></TouchableOpacity></Link>
-                    <Link href="/team" asChild><TouchableOpacity style={ls.teamBtn}><Text style={ls.teamBtnText}>⚔️</Text></TouchableOpacity></Link>
+                    {/* Perfil */}
+                    <Link href="/profile" asChild>
+                        <TouchableOpacity style={ls.profileBtn}>
+                            <Text style={ls.profileBtnText}>N</Text>
+                        </TouchableOpacity>
+                    </Link>
+
+                    {/* Time — ícone de pokébola */}
+                    <Link href="/team" asChild>
+                        <TouchableOpacity style={ls.teamBtn}>
+                            <View style={ls.pokeballIcon}>
+                                <View style={ls.pokeballTop}    />
+                                <View style={ls.pokeballStripe} />
+                                <View style={ls.pokeballBottom} />
+                                <View style={ls.pokeballCenter} />
+                            </View>
+                        </TouchableOpacity>
+                    </Link>
+
+                    {/* Batalha — ⚔️ */}
+                    <Link href="/battle" asChild>
+                        <TouchableOpacity style={ls.battleBtn}>
+                            <Text style={ls.battleBtnText}>⚔️</Text>
+                        </TouchableOpacity>
+                    </Link>
+
+                    {/* Sair */}
                     <TouchableOpacity onPress={() => router.replace('/')} style={ls.exitBtn}>
                         <Text style={ls.exitText}>Sair</Text>
                     </TouchableOpacity>
@@ -335,24 +353,25 @@ export default function Dashboard() {
             </View>
 
             {/* Filtros por tipo */}
-            <FlatList
+            <ScrollView
                 horizontal
-                data={FILTER_TYPES}
-                keyExtractor={t => t}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={ls.filterList}
-                renderItem={({ item: t }) => {
+                style={ls.filterScroll}
+            >
+                {FILTER_TYPES.map(t => {
                     const active = activeType === t;
                     return (
                         <TouchableOpacity
+                            key={t}
                             onPress={() => setActiveType(active ? null : t)}
                             style={[ls.chip, { backgroundColor: active ? tc(t) : tc(t) + '22', borderColor: tc(t) + '66' }]}
                         >
                             <Text style={[ls.chipText, { color: active ? '#fff' : tc(t) }]}>{t}</Text>
                         </TouchableOpacity>
                     );
-                }}
-            />
+                })}
+            </ScrollView>
 
             {loading ? (
                 <View style={ls.loadWrap}>
@@ -380,24 +399,40 @@ export default function Dashboard() {
 }
 
 const ls = StyleSheet.create({
-    screen:     { flex: 1, backgroundColor: '#050810' },
-    header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 12 },
-    eyebrow:    { color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 2.5, marginBottom: 4 },
-    title:      { color: '#e8f0fe', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
-    headerRight:{ alignItems: 'center', gap: 8, flexDirection: 'row' },
-    profileBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF535022', borderWidth: 2, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center' },
+    screen:      { flex: 1, backgroundColor: '#050810' },
+    header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 12 },
+    eyebrow:     { color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 2.5, marginBottom: 4 },
+    title:       { color: '#e8f0fe', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+    headerRight: { alignItems: 'center', gap: 8, flexDirection: 'row' },
+
+    // Perfil
+    profileBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF535022', borderWidth: 2, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center' },
     profileBtnText: { color: '#EF5350', fontSize: 18, fontWeight: '900' },
-    exitBtn:    { backgroundColor: '#0f1420', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 0.5, borderColor: '#1a2235' },
-    exitText:   { color: '#EF5350', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-    searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#080d14', borderRadius: 12, borderWidth: 0.5, borderColor: '#0f1e2e', marginHorizontal: 16, paddingHorizontal: 14, marginBottom: 10 },
-    searchInput:{ flex: 1, color: '#e8f0fe', fontSize: 14, paddingVertical: 11 },
-    filterList: { paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
-    chip:       { borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 5 },
-    chipText:   { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
-    count:      { color: '#1a3050', fontSize: 10, fontWeight: '600', letterSpacing: 1, paddingHorizontal: 20, marginBottom: 8 },
-    grid:       { paddingHorizontal: 16, paddingBottom: 32 },
-    loadWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-    loadText:   { color: '#3a5068', fontSize: 13, letterSpacing: 1 },
-    teamBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD54F22', borderWidth: 2, borderColor: '#FFD54F', alignItems: 'center', justifyContent: 'center' },
-    teamBtnText:{ fontSize: 16 },
+
+    // Time — botão com pokébola construída com Views
+    teamBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ffffff12', borderWidth: 2, borderColor: '#ffffff44', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    pokeballIcon:   { width: 26, height: 26, borderRadius: 13, overflow: 'hidden', borderWidth: 2, borderColor: '#1a1a2e' },
+    pokeballTop:    { height: 9,  backgroundColor: '#EF5350' },
+    pokeballStripe: { height: 4,  backgroundColor: '#1a1a2e' },
+    pokeballBottom: { height: 9,  backgroundColor: '#f5f5f0' },
+    pokeballCenter: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#1a1a2e', top: 9, left: 9 },
+
+    // Batalha
+    battleBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD54F22', borderWidth: 2, borderColor: '#FFD54F', alignItems: 'center', justifyContent: 'center' },
+    battleBtnText: { fontSize: 18 },
+
+    // Sair
+    exitBtn:  { backgroundColor: '#0f1420', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 0.5, borderColor: '#1a2235' },
+    exitText: { color: '#EF5350', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+
+    searchWrap:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#080d14', borderRadius: 12, borderWidth: 0.5, borderColor: '#0f1e2e', marginHorizontal: 16, paddingHorizontal: 14, marginBottom: 10 },
+    searchInput: { flex: 1, color: '#e8f0fe', fontSize: 14, paddingVertical: 11 },
+    filterScroll:{ flexShrink: 0 },
+    filterList:  { paddingHorizontal: 16, gap: 10, paddingBottom: 12, paddingTop: 8, alignItems: 'center' },
+    chip:        { borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 18, paddingVertical: 12, minWidth: 72, alignItems: 'center', height: 44, justifyContent: 'center' },
+    chipText:    { fontSize: 13, fontWeight: '700', textTransform: 'capitalize' },
+    count:       { color: '#1a3050', fontSize: 10, fontWeight: '600', letterSpacing: 1, paddingHorizontal: 20, marginBottom: 8 },
+    grid:        { paddingHorizontal: 16, paddingBottom: 32 },
+    loadWrap:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+    loadText:    { color: '#3a5068', fontSize: 13, letterSpacing: 1 },
 });

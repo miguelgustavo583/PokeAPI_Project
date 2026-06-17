@@ -4,9 +4,11 @@ export default function RootLayout() {
     return (
         <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
+            <Stack.Screen name="register" />
             <Stack.Screen name="dashboard" />
             <Stack.Screen name="profile" />
             <Stack.Screen name="team" />
+            <Stack.Screen name="battle" />
         </Stack>
     );
 }

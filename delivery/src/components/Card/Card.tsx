@@ -1,11 +1,12 @@
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
+import { login } from '../../integration/authIntegration';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Input } from '../Input/Input';
 import { Button } from '../Button/Button';
+import React from 'react';
 
-const VALID_USER     = 'Neyma';
-const VALID_PASSWORD = 'VaiBrasil';
 const { width }      = Dimensions.get('window');
 
 // Pokébola decorativa feita com Views
@@ -25,12 +26,25 @@ export const Card = () => {
     const [message,  setMessage]  = useState('');
     const router = useRouter();
 
-    const handleLogin = () => {
-        if (trainer === VALID_USER && password === VALID_PASSWORD) {
-            setMessage('');
+    const [loading, setLoading] = useState(false);
+
+    const handleLogin = async () => {
+        setMessage('');
+        if (!trainer.trim() || !password) return setMessage('Preencha todos os campos.');
+        try {
+            setLoading(true);
+            const user = await login(trainer.trim(), password);
+            const userId = user.id ?? user.userId ?? user.user_id;
+            // Salva o usuário localmente para usar nas outras telas
+            await AsyncStorage.setItem('@pokemon_user', JSON.stringify({ id: userId, username: trainer.trim() }));
             router.push('/dashboard');
-        } else {
-            setMessage('Treinador ou senha incorretos.');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message
+                ?? err?.response?.data?.error
+                ?? 'Treinador ou senha incorretos.';
+            setMessage(msg);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -82,7 +96,26 @@ export const Card = () => {
                     </View>
                 )}
 
-                <Button label="INICIAR JORNADA  →" onPress={handleLogin} />
+                <TouchableOpacity
+                    onPress={handleLogin}
+                    disabled={loading}
+                    style={[s.loginBtnMain, loading && { opacity: 0.7 }]}
+                    activeOpacity={0.85}
+                >
+                    {loading
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={s.loginBtnText}>INICIAR JORNADA  →</Text>
+                    }
+                </TouchableOpacity>
+
+                <View style={s.divider} />
+
+                <Link href="/register" asChild>
+                    <TouchableOpacity style={s.registerBtn}>
+                        <Text style={s.registerText}>Novo por aqui?  </Text>
+                        <Text style={s.registerLink}>Criar conta →</Text>
+                    </TouchableOpacity>
+                </Link>
 
                 <Text style={s.footer}>Pokédex · Geração I · 151 Pokémon</Text>
             </View>
@@ -211,4 +244,30 @@ const s = StyleSheet.create({
         letterSpacing: 1.5,
         marginTop: 20,
     },
+
+    loginBtnMain: {
+        backgroundColor: '#EF5350',
+        borderRadius: 10,
+        paddingVertical: 14,
+        alignItems: 'center',
+        width: '100%',
+        borderWidth: 1,
+        borderColor: '#ff867c40',
+        marginTop: 4,
+    },
+    loginBtnText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '800',
+        letterSpacing: 1.5,
+    },
+    registerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 4,
+        marginTop: 4,
+    },
+    registerText: { color: '#3a5068', fontSize: 13 },
+    registerLink: { color: '#EF5350', fontSize: 13, fontWeight: '700' },
 });
