@@ -4,9 +4,10 @@ import {
     Image, ActivityIndicator, FlatList, TextInput,
     Dimensions, Animated, StatusBar,
 } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, useNavigation } from 'expo-router';
 import axios from 'axios';
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 const CARD_W    = (width - 48) / 2;
@@ -237,6 +238,7 @@ const det = StyleSheet.create({
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
     const router = useRouter();
+    const navigation = useNavigation();
 
     const [pokemons,   setPokemons]   = useState<Pokemon[]>([]);
     const [filtered,   setFiltered]   = useState<Pokemon[]>([]);
@@ -244,6 +246,30 @@ export default function Dashboard() {
     const [search,     setSearch]     = useState('');
     const [activeType, setActiveType] = useState<string | null>(null);
     const [selected,   setSelected]   = useState<Pokemon | null>(null);
+    const [userInitial, setUserInitial] = useState('U'); // Fallback padrão
+
+    // Carrega a inicial do usuário de forma confiável ao focar na tela
+    useEffect(() => {
+        const loadUser = async () => {
+            try {
+                const raw = await AsyncStorage.getItem('@pokemon_user');
+                if (raw) {
+                    const user = JSON.parse(raw);
+                    const name = user.username ?? user.name ?? '';
+                    if (name.length > 0) {
+                        setUserInitial(name.charAt(0).toUpperCase());
+                    }
+                }
+            } catch (err) {
+                console.log('Erro ao buscar usuário na dashboard:', err);
+            }
+        };
+
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadUser();
+        });
+        return unsubscribe;
+    }, [navigation]);
 
     useEffect(() => {
         const load = async () => {
@@ -301,10 +327,10 @@ export default function Dashboard() {
                     <Text style={ls.title}>Pokédex</Text>
                 </View>
                 <View style={ls.headerRight}>
-                    {/* Perfil */}
+                    {/* Perfil com Inicial Dinâmica */}
                     <Link href="/profile" asChild>
                         <TouchableOpacity style={ls.profileBtn}>
-                            <Text style={ls.profileBtnText}>N</Text>
+                            <Text style={ls.profileBtnText}>{userInitial}</Text>
                         </TouchableOpacity>
                     </Link>
 
@@ -405,11 +431,9 @@ const ls = StyleSheet.create({
     title:       { color: '#e8f0fe', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
     headerRight: { alignItems: 'center', gap: 8, flexDirection: 'row' },
 
-    // Perfil
     profileBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF535022', borderWidth: 2, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center' },
     profileBtnText: { color: '#EF5350', fontSize: 18, fontWeight: '900' },
 
-    // Time — botão com pokébola construída com Views
     teamBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ffffff12', borderWidth: 2, borderColor: '#ffffff44', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     pokeballIcon:   { width: 26, height: 26, borderRadius: 13, overflow: 'hidden', borderWidth: 2, borderColor: '#1a1a2e' },
     pokeballTop:    { height: 9,  backgroundColor: '#EF5350' },
@@ -417,11 +441,9 @@ const ls = StyleSheet.create({
     pokeballBottom: { height: 9,  backgroundColor: '#f5f5f0' },
     pokeballCenter: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#1a1a2e', top: 9, left: 9 },
 
-    // Batalha
     battleBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD54F22', borderWidth: 2, borderColor: '#FFD54F', alignItems: 'center', justifyContent: 'center' },
     battleBtnText: { fontSize: 18 },
 
-    // Sair
     exitBtn:  { backgroundColor: '#0f1420', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 0.5, borderColor: '#1a2235' },
     exitText: { color: '#EF5350', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
 

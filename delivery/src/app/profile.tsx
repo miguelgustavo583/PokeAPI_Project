@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Image, Dimensions, Animated, StatusBar, ActivityIndicator,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useNavigation } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React from 'react';
@@ -12,19 +12,8 @@ const { width } = Dimensions.get('window');
 
 const BASE = 'https://lnh1dhp1mj.execute-api.us-east-1.amazonaws.com/api-pokemon';
 
-const TYPE_COLORS: Record<string, string> = {
-    fire: '#FF6B35', water: '#4FC3F7', grass: '#66BB6A', electric: '#FFD54F',
-    psychic: '#CE93D8', ice: '#80DEEA', dragon: '#7986CB', dark: '#546E7A',
-    fairy: '#F48FB1', fighting: '#EF5350', flying: '#90CAF9', poison: '#AB47BC',
-    ground: '#BCAAA4', rock: '#8D6E63', bug: '#8BC34A', ghost: '#7E57C2',
-    steel: '#B0BEC5', normal: '#CFD8DC',
-};
-const tc = (t: string) => TYPE_COLORS[t] ?? '#90A4AE';
-
-// A API retorna objetos com index, name, image (sem tipos)
 type TeamPokemon = { index: string; name: string; image: string; type?: string };
 
-// ─── Pokébola ─────────────────────────────────────────────────────────────────
 const Pokeball = ({ size = 36 }: { size?: number }) => (
     <View style={[pb.ball, { width: size, height: size, borderRadius: size / 2 }]}>
         <View style={[pb.top,         { height: size * 0.38 }]} />
@@ -98,26 +87,16 @@ const bgd = StyleSheet.create({
     name:   { color: '#3a5068', fontSize: 9, fontWeight: '600', textAlign: 'center', letterSpacing: 0.5 },
 });
 
-// ─── Card do Pokémon — usa imagem direto da API ───────────────────────────────
 const PokemonCard = ({ pokemon }: { pokemon: TeamPokemon }) => {
-    // Troca sprite baixo-res pelo official-artwork se vier do raw.githubusercontent
     const image = pokemon.image?.includes('sprites/master/sprites/pokemon/')
-        ? pokemon.image.replace(
-            'sprites/master/sprites/pokemon/',
-            'sprites/master/sprites/pokemon/other/official-artwork/'
-          )
+        ? pokemon.image.replace('sprites/master/sprites/pokemon/', 'sprites/master/sprites/pokemon/other/official-artwork/')
         : pokemon.image;
 
-    // Cor baseada no nome (fallback normal)
     const color = '#EF5350';
 
     return (
         <View style={[pk.wrap, { borderColor: color + '44', backgroundColor: color + '10' }]}>
-            <Image
-                source={{ uri: image }}
-                style={pk.img}
-                resizeMode="contain"
-            />
+            <Image source={{ uri: image }} style={pk.img} resizeMode="contain" />
             <Text style={[pk.name, { color: '#e8f0fe' }]} numberOfLines={1}>{pokemon.name}</Text>
             <Text style={pk.index}>#{pokemon.index}</Text>
         </View>
@@ -130,20 +109,15 @@ const pk = StyleSheet.create({
     index: { color: '#3a5068', fontSize: 8, fontWeight: '600' },
 });
 
-// ─── PROFILE SCREEN ───────────────────────────────────────────────────────────
 export default function Profile() {
     const [username,     setUsername]     = useState('');
     const [wins,         setWins]         = useState(0);
     const [losses,       setLosses]       = useState(0);
     const [teamPokemons, setTeamPokemons] = useState<TeamPokemon[]>([]);
     const [loading,      setLoading]      = useState(true);
+    const navigation = useNavigation();
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        loadProfile();
-        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-    }, []);
 
     const loadProfile = async () => {
         try {
@@ -154,20 +128,17 @@ export default function Profile() {
             const userId = user.id ?? user.userId ?? user.user_id;
             setUsername(user.username ?? user.name ?? '');
 
-            // Stats
             try {
                 const { data: stats } = await axios.get(`${BASE}/auth/v1/stats/${userId}`);
                 setWins(Number(stats.vitorias   ?? stats.wins   ?? stats.Vitorias ?? 0));
                 setLosses(Number(stats.derrotas ?? stats.losses ?? stats.Derrotas ?? 0));
-            } catch { /* sem stats ainda */ }
+            } catch { }
 
-            // Time — a API retorna { id, userId, team: [ { index, name, image } ] }
             try {
                 const { data } = await axios.get(`${BASE}/pokemon/v1/team`, {
                     params: { 'user-id': userId },
                 });
 
-                // Extrai o array team do objeto retornado
                 const teamArray: TeamPokemon[] = Array.isArray(data)
                     ? data
                     : Array.isArray(data?.team)
@@ -176,7 +147,7 @@ export default function Profile() {
 
                 setTeamPokemons(teamArray.filter(p => p && p.name));
             } catch (e) {
-                console.log('Erro time:', e);
+                console.log('Erro time no perfil:', e);
             }
         } catch (err) {
             console.log('Erro profile:', err);
@@ -184,6 +155,15 @@ export default function Profile() {
             setLoading(false);
         }
     };
+
+    // Recarrega os dados globais e o time no perfil sempre que a página ganhar foco
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadProfile();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+        });
+        return unsubscribe;
+    }, [navigation]);
 
     const total        = wins + losses;
     const winRate      = total > 0 ? Math.round((wins / total) * 100) : 0;
@@ -193,14 +173,11 @@ export default function Profile() {
     return (
         <View style={s.screen}>
             <StatusBar barStyle="light-content" />
-            <View style={s.bgGlow} />
-            <View style={s.bgCircle} />
+            <View style={s.bgGlow} /><View style={s.bgCircle} />
 
             <View style={s.header}>
                 <Link href="/dashboard" asChild>
-                    <TouchableOpacity style={s.backBtn}>
-                        <Text style={s.backText}>← Pokédex</Text>
-                    </TouchableOpacity>
+                    <TouchableOpacity style={s.backBtn}><Text style={s.backText}>← Pokédex</Text></TouchableOpacity>
                 </Link>
                 <Pokeball size={40} />
             </View>
@@ -213,8 +190,6 @@ export default function Profile() {
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
                     <Animated.View style={{ opacity: fadeAnim }}>
-
-                        {/* Hero */}
                         <View style={s.heroSection}>
                             <View style={s.avatarWrap}>
                                 <View style={s.avatarFallback}>
@@ -229,7 +204,6 @@ export default function Profile() {
                             </View>
                         </View>
 
-                        {/* V / D / WR */}
                         <View style={s.wdRow}>
                             <View style={[s.wdCard, { borderColor: '#66BB6A55', backgroundColor: '#66BB6A12' }]}>
                                 <Text style={s.wdIcon}>🏆</Text>
@@ -250,7 +224,6 @@ export default function Profile() {
                             </View>
                         </View>
 
-                        {/* Desempenho */}
                         <Text style={s.sectionLabel}>DESEMPENHO</Text>
                         <View style={s.card}>
                             <StatLine label="Vitórias"  value={wins}    max={100} color="#66BB6A" />
@@ -259,7 +232,6 @@ export default function Profile() {
                             <StatLine label="Batalhas"  value={total}   max={150} color="#4FC3F7" />
                         </View>
 
-                        {/* Time */}
                         <Text style={s.sectionLabel}>MEU TIME  ·  {teamPokemons.length} POKÉMON</Text>
                         {teamPokemons.length > 0 ? (
                             <View style={s.teamGrid}>
@@ -271,7 +243,6 @@ export default function Profile() {
                             </View>
                         )}
 
-                        {/* Insígnias */}
                         <Text style={s.sectionLabel}>INSÍGNIAS DE GINÁSIO</Text>
                         <View style={s.card}>
                             <View style={s.badgesGrid}>
@@ -285,7 +256,6 @@ export default function Profile() {
                             </View>
                         </View>
 
-                        {/* Estatísticas */}
                         <Text style={s.sectionLabel}>ESTATÍSTICAS</Text>
                         <View style={s.statsGrid}>
                             {[
@@ -301,7 +271,6 @@ export default function Profile() {
                                 </View>
                             ))}
                         </View>
-
                         <View style={{ height: 48 }} />
                     </Animated.View>
                 </ScrollView>
@@ -314,43 +283,35 @@ const s = StyleSheet.create({
     screen:   { flex: 1, backgroundColor: '#050810' },
     bgGlow:   { position: 'absolute', top: 0, left: 0, right: 0, height: '45%', backgroundColor: '#1a0505', opacity: 0.5 },
     bgCircle: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#EF535010', top: -80, right: -60 },
-
     header:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 8 },
     backBtn:  { padding: 8 },
     backText: { color: '#e8f0fe', fontSize: 14, fontWeight: '700' },
     scroll:   { paddingHorizontal: 20, paddingTop: 8 },
-
     loadWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
     loadText: { color: '#3a5068', fontSize: 13, letterSpacing: 1 },
-
     heroSection:   { alignItems: 'center', paddingTop: 12, paddingBottom: 24 },
     avatarWrap:    { width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: '#EF5350', overflow: 'hidden', marginBottom: 8, shadowColor: '#EF5350', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 12 },
     avatarFallback:{ flex: 1, backgroundColor: '#0f1420', alignItems: 'center', justifyContent: 'center' },
     avatarInitial: { color: '#EF5350', fontSize: 44, fontWeight: '900' },
-
     trainerLabel: { color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 3, marginBottom: 6 },
     trainerName:  { color: '#e8f0fe', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 12 },
     rankBadge:    { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
     rankText:     { fontSize: 13, fontWeight: '700' },
-
     wdRow:     { flexDirection: 'row', backgroundColor: '#080d14', borderRadius: 16, borderWidth: 0.5, borderColor: '#0f1e2e', marginBottom: 8, overflow: 'hidden' },
     wdCard:    { flex: 1, alignItems: 'center', paddingVertical: 20 },
     wdDivider: { width: 0.5, backgroundColor: '#0f1e2e' },
     wdIcon:    { fontSize: 22, marginBottom: 6 },
     wdValue:   { fontSize: 26, fontWeight: '900', marginBottom: 2 },
     wdLabel:   { color: '#3a5068', fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
-
     sectionLabel:       { color: '#3a5068', fontSize: 9, fontWeight: '700', letterSpacing: 3, marginTop: 24, marginBottom: 12 },
     card:               { backgroundColor: '#080d14', borderRadius: 16, borderWidth: 0.5, borderColor: '#0f1e2e', padding: 16 },
     badgesGrid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 14 },
     badgesProgressText: { color: '#3a5068', fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginBottom: 6 },
     badgesTrack:        { height: 3, backgroundColor: '#0f1820', borderRadius: 99, overflow: 'hidden' },
     badgesFill:         { height: 3, backgroundColor: '#FFD700', borderRadius: 99 },
-
     teamGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 8 },
     emptyTeam:     { backgroundColor: '#080d14', borderRadius: 16, borderWidth: 0.5, borderColor: '#0f1e2e', padding: 24, alignItems: 'center' },
     emptyTeamText: { color: '#3a5068', fontSize: 13, fontWeight: '700' },
-
     statsGrid: { flexDirection: 'row', gap: 10 },
     statCard:  { flex: 1, backgroundColor: '#080d14', borderRadius: 14, borderWidth: 0.5, borderColor: '#0f1e2e', alignItems: 'center', paddingVertical: 16 },
     statValue: { color: '#e8f0fe', fontSize: 18, fontWeight: '900', marginBottom: 3 },

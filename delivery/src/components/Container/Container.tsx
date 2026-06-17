@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useEffect, useRef } from 'react';
 
@@ -6,7 +7,7 @@ const { width, height } = Dimensions.get('window');
 type ContainerProps = { children: React.ReactNode };
 
 // Pokébolas flutuantes com posição e tamanho fixos
-const BALLS = [
+const BALLS: Array<{ id: number; x: number | `${number}%`; size: number; duration: number; delay: number }> = [
     { id: 1, x: '5%',  size: 40, duration: 7000, delay: 0    },
     { id: 2, x: '20%', size: 24, duration: 9000, delay: 800  },
     { id: 3, x: '40%', size: 52, duration: 6500, delay: 400  },
@@ -19,7 +20,7 @@ const BALLS = [
 
 // Mini pokébola flutuante
 const FloatingBall = ({ x, size, duration, delay }: {
-    x: string; size: number; duration: number; delay: number;
+    x: number | `${number}%`; size: number; duration: number; delay: number;
 }) => {
     const anim = useRef(new Animated.Value(0)).current;
 
@@ -65,7 +66,7 @@ const fb = StyleSheet.create({
 });
 
 // Partícula de estrela pulsante
-const Star = ({ x, y, size, delay }: { x: string; y: string; size: number; delay: number }) => {
+const Star = ({ x, y, size, delay }: { x: number | `${number}%`; y: number | `${number}%`; size: number; delay: number }) => {
     const pulse = useRef(new Animated.Value(0.2)).current;
     useEffect(() => {
         const loop = Animated.loop(
@@ -87,7 +88,7 @@ const Star = ({ x, y, size, delay }: { x: string; y: string; size: number; delay
     );
 };
 
-const STARS = [
+const STARS: Array<{ id: number; x: `${number}%`; y: `${number}%`; size: number; delay: number }> = [
     { id: 1,  x: '8%',  y: '12%', size: 3, delay: 0    },
     { id: 2,  x: '22%', y: '28%', size: 2, delay: 500  },
     { id: 3,  x: '45%', y: '8%',  size: 4, delay: 300  },

@@ -1,19 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Image,
-    Dimensions, Animated, StatusBar, ScrollView, Easing,
+    Animated, StatusBar, ScrollView, ActivityIndicator, Dimensions
 } from 'react-native';
 import { Link } from 'expo-router';
 import axios from 'axios';
 import React from 'react';
-
-const { width, height } = Dimensions.get('window');
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTeam, addCaptured, getStats, updateStats } from '../integration/authIntegration';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Stat    = { nome: string; forca: number };
 type Pokemon = { index: string; nome: string; imagem: string; tipos: string[]; poderes: Stat[] };
-
-type BattleState = 'IDLE' | 'SEARCHING' | 'FOUND' | 'BATTLING' | 'REWARD' | 'LOSS';
+type BattleState = 'LOADING' | 'IDLE' | 'SEARCHING' | 'FOUND' | 'BATTLING' | 'REWARD' | 'LOSS';
 
 // ─── Cores por tipo ───────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
@@ -30,7 +29,7 @@ const STAT_LABELS: Record<string, string> = {
     'special-attack': 'SP.A', 'special-defense': 'SP.D', speed: 'VEL',
 };
 
-const DUEL_STATS = ['hp', 'attack', 'defense', 'speed'];
+const DUEL_STATS = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'];
 
 // ─── Pokébola ─────────────────────────────────────────────────────────────────
 const MiniPokeball = ({ size = 28 }: { size?: number }) => (
@@ -48,12 +47,16 @@ const ThrowBall = ({ onEnd }: { onEnd: () => void }) => {
     const y    = useRef(new Animated.Value(0)).current;
     const spin = useRef(new Animated.Value(0)).current;
     const fade = useRef(new Animated.Value(1)).current;
+    
+    // Fallbacks para as animações funcionarem em diversas telas
+    const screenW = Dimensions.get('window').width;
+    const screenH = Dimensions.get('window').height;
 
     useEffect(() => {
         Animated.sequence([
             Animated.parallel([
-                Animated.timing(x,    { toValue: width * 0.38, duration: 700, useNativeDriver: true }),
-                Animated.timing(y,    { toValue: -height * 0.22, duration: 700, useNativeDriver: true }),
+                Animated.timing(x,    { toValue: screenW * 0.38, duration: 700, useNativeDriver: true }),
+                Animated.timing(y,    { toValue: -screenH * 0.22, duration: 700, useNativeDriver: true }),
                 Animated.timing(spin, { toValue: 3, duration: 700, useNativeDriver: true }),
             ]),
             Animated.timing(fade, { toValue: 0, duration: 280, useNativeDriver: true }),
@@ -91,12 +94,12 @@ const BattleLog = ({ messages }: { messages: string[] }) => (
     </View>
 );
 const bl = StyleSheet.create({
-    box:    { backgroundColor: '#080d14', borderRadius: 12, borderWidth: 1, borderColor: '#0f1e2e', padding: 12, minHeight: 68 },
+    box:    { backgroundColor: '#080d14', borderRadius: 12, borderWidth: 1, borderColor: '#0f1e2e', padding: 12, minHeight: 74 },
     msg:    { color: '#3a5068', fontSize: 11, marginBottom: 2 },
     latest: { color: '#e8f0fe', fontWeight: '600', fontSize: 12 },
 });
 
-// ─── Card do lutador ──────────────────────────────────────────────────────────
+// ─── Card do lutador (Refatorado para Web/Mobile Responsivo) ──────────────────
 const FighterCard = ({
     pokemon, side, chosenStat,
 }: {
@@ -107,11 +110,14 @@ const FighterCard = ({
 
     return (
         <View style={[fc.wrap, { borderColor: color + '44', backgroundColor: color + '10' }]}>
-            <Image
-                source={{ uri: pokemon.imagem }}
-                style={[fc.img, flip && { transform: [{ scaleX: -1 }] }]}
-                resizeMode="contain"
-            />
+            {/* O container da imagem absorve o espaço livre, impedindo a imagem de vazar */}
+            <View style={fc.imgContainer}>
+                <Image
+                    source={{ uri: pokemon.imagem }}
+                    style={[fc.img, flip && { transform: [{ scaleX: -1 }] }]}
+                    resizeMode="contain"
+                />
+            </View>
             <Text style={[fc.name, { color }]} numberOfLines={1}>{pokemon.nome}</Text>
             <View style={fc.stats}>
                 {DUEL_STATS.map(stat => {
@@ -129,19 +135,20 @@ const FighterCard = ({
     );
 };
 const fc = StyleSheet.create({
-    wrap:    { flex: 1, borderRadius: 14, borderWidth: 1, padding: 10, alignItems: 'center' },
-    img:     { width: width * 0.36, height: width * 0.36 },
-    name:    { fontSize: 12, fontWeight: '900', textTransform: 'capitalize', letterSpacing: 0.3, marginBottom: 8, textAlign: 'center' },
-    stats:   { width: '100%', gap: 4 },
+    wrap:    { flex: 1, borderRadius: 14, borderWidth: 1, padding: 10, alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden' },
+    imgContainer: { flex: 1, width: '100%', minHeight: 60, justifyContent: 'center', alignItems: 'center' },
+    img:     { width: '100%', height: '100%' },
+    name:    { fontSize: 12, fontWeight: '900', textTransform: 'capitalize', letterSpacing: 0.3, marginVertical: 6, textAlign: 'center' },
+    stats:   { width: '100%', gap: 4, flexShrink: 0 },
     statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderColor: 'transparent', borderWidth: 1 },
     statName:{ color: '#3a5068', fontSize: 9, fontWeight: '700' },
     statVal: { color: '#e8f0fe', fontSize: 11, fontWeight: '800' },
 });
 
-// ─── Busca pokémon da PokeAPI ─────────────────────────────────────────────────
-const fetchPokemon = async (id: number): Promise<Pokemon | null> => {
+// ─── Busca pokémon completo da PokeAPI ─────────────────────────────────────────
+const fetchPokemon = async (idOrName: number | string): Promise<Pokemon | null> => {
     try {
-        const { data } = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
+        const { data } = await axios.get(`https://pokeapi.co/api/v2/pokemon/${idOrName}`);
         return {
             nome:    data.name,
             index:   data.id.toString().padStart(3, '0'),
@@ -154,7 +161,7 @@ const fetchPokemon = async (id: number): Promise<Pokemon | null> => {
 
 // ─── TELA DE BATALHA ─────────────────────────────────────────────────────────
 export default function BattleScreen() {
-    const [state,          setState]          = useState<BattleState>('IDLE');
+    const [state,          setState]          = useState<BattleState>('LOADING');
     const [myTeam,         setMyTeam]         = useState<Pokemon[]>([]);
     const [oppTeam,        setOppTeam]        = useState<Pokemon[]>([]);
     const [playerFighter,  setPlayerFighter]  = useState<Pokemon | null>(null);
@@ -165,24 +172,43 @@ export default function BattleScreen() {
     const [logs,           setLogs]           = useState<string[]>([]);
     const [reward,         setReward]         = useState<Pokemon | null>(null);
     const [throwing,       setThrowing]       = useState(false);
+    const [userId,         setUserId]         = useState<string | null>(null);
 
     // Anims
     const pulseAnim  = useRef(new Animated.Value(1)).current;
     const slideLeft  = useRef(new Animated.Value(-280)).current;
     const slideRight = useRef(new Animated.Value(280)).current;
-    const statAnim   = useRef(new Animated.Value(0)).current;
 
     const addLog = (msg: string) => setLogs(prev => [msg, ...prev]);
 
-    // ── Carrega time do player (primeiros 9 Pokémon aleatórios) ───────────────
     useEffect(() => {
-        const ids = Array.from({ length: 9 }, () => Math.floor(Math.random() * 151) + 1);
-        Promise.all(ids.map(fetchPokemon)).then(results => {
-            setMyTeam(results.filter(Boolean) as Pokemon[]);
-        });
+        async function loadUserTeam() {
+            try {
+                const rawUser = await AsyncStorage.getItem('@pokemon_user');
+                if (!rawUser) {
+                    setState('IDLE');
+                    return;
+                }
+                const user = JSON.parse(rawUser);
+                setUserId(user.id);
+
+                const teamData = await getTeam(user.id);
+                
+                if (teamData && teamData.team && teamData.team.length > 0) {
+                    const detailedTeam = await Promise.all(
+                        teamData.team.map((p: any) => fetchPokemon(p.name))
+                    );
+                    setMyTeam(detailedTeam.filter(Boolean) as Pokemon[]);
+                }
+            } catch (err) {
+                console.log("Erro ao carregar time da batalha:", err);
+            } finally {
+                setState('IDLE');
+            }
+        }
+        loadUserTeam();
     }, []);
 
-    // ── Animação de busca ─────────────────────────────────────────────────────
     const startSearch = async () => {
         setState('SEARCHING');
         setPlayerWins(0); setOppWins(0); setLogs([]);
@@ -193,10 +219,9 @@ export default function BattleScreen() {
         ]));
         loop.start();
 
-        // Gera time adversário (3 Pokémon aleatórios)
         setTimeout(async () => {
             loop.stop(); pulseAnim.setValue(1);
-            const ids = Array.from({ length: 3 }, () => Math.floor(Math.random() * 151) + 1);
+            const ids = Array.from({ length: 5 }, () => Math.floor(Math.random() * 151) + 1);
             const opp = (await Promise.all(ids.map(fetchPokemon))).filter(Boolean) as Pokemon[];
             setOppTeam(opp);
             setState('FOUND');
@@ -207,13 +232,25 @@ export default function BattleScreen() {
         }, 2000);
     };
 
-    // ── Rodada de batalha ─────────────────────────────────────────────────────
+    const updateGlobalStats = async (isVictory: boolean) => {
+        if (!userId) return;
+        try {
+            const currentStats = await getStats(userId);
+            const wins = parseInt(currentStats.vitorias || '0') + (isVictory ? 1 : 0);
+            const losses = parseInt(currentStats.derrotas || '0') + (!isVictory ? 1 : 0);
+            const currentLevel = currentStats.level || '1';
+
+            await updateStats(userId, currentLevel, wins.toString(), losses.toString());
+        } catch (err) {
+            console.log("Erro ao salvar estatísticas globais:", err);
+        }
+    };
+
     const playRound = (pW: number, oW: number, currentOpp: Pokemon[]) => {
         if (pW >= 3) { handleWin(); return; }
-        if (oW >= 3) { setState('LOSS'); return; }
+        if (oW >= 3) { handleLoss(); return; }
 
-        const myPool  = myTeam.length > 0 ? myTeam : [];
-        const pFight  = myPool[Math.floor(Math.random() * myPool.length)];
+        const pFight  = myTeam[Math.floor(Math.random() * myTeam.length)];
         const oFight  = currentOpp[Math.floor(Math.random() * currentOpp.length)];
         const stat    = DUEL_STATS[Math.floor(Math.random() * DUEL_STATS.length)];
 
@@ -221,13 +258,11 @@ export default function BattleScreen() {
         setOppFighter(oFight);
         setChosenStat('');
 
-        // Reset e entrada dos lutadores
-        slideLeft.setValue(-280); slideRight.setValue(280); statAnim.setValue(0);
+        slideLeft.setValue(-280); slideRight.setValue(280);
         Animated.parallel([
             Animated.timing(slideLeft,  { toValue: 0, duration: 480, useNativeDriver: true }),
             Animated.timing(slideRight, { toValue: 0, duration: 480, useNativeDriver: true }),
         ]).start(() => {
-            // Sorteio animado do stat
             let draws = 0;
             const maxDraws = 14;
             const interval = setInterval(() => {
@@ -246,7 +281,7 @@ export default function BattleScreen() {
                             newPW++;
                             setPlayerWins(newPW);
                         } else {
-                            addLog(`❌ Adversário venceu! ${STAT_LABELS[stat] ?? stat} ${oVal} vs ${pVal}`);
+                            addLog(`❌ Rival venceu! ${STAT_LABELS[stat] ?? stat} ${oVal} vs ${pVal}`);
                             newOW++;
                             setOppWins(newOW);
                         }
@@ -259,20 +294,40 @@ export default function BattleScreen() {
         });
     };
 
-    // ── Vitória: recompensa aleatória ─────────────────────────────────────────
+    const handleLoss = () => {
+        setState('LOSS');
+        updateGlobalStats(false);
+    };
+
     const handleWin = async () => {
         setState('REWARD');
         setThrowing(true);
-        const id  = Math.floor(Math.random() * 151) + 1;
-        const pok = await fetchPokemon(id);
+        updateGlobalStats(true);
+
+        const idRecompensa = Math.floor(Math.random() * 151) + 1;
+        const pok = await fetchPokemon(idRecompensa);
+
+        if (userId) {
+            try {
+                await addCaptured(userId, idRecompensa);
+            } catch (err) {
+                console.log("Erro ao salvar pokemon:", err);
+            }
+        }
+
         setTimeout(() => {
             setReward(pok);
             setThrowing(false);
         }, 1500);
     };
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── IDLE ─────────────────────────────────────────────────────────────────
+    if (state === 'LOADING') return (
+        <View style={[s.screen, s.centered]}>
+            <ActivityIndicator size="large" color="#EF5350" />
+            <Text style={[s.searchSub, { marginTop: 12 }]}>Carregando arena...</Text>
+        </View>
+    );
+
     if (state === 'IDLE') return (
         <View style={s.screen}>
             <StatusBar barStyle="light-content" />
@@ -287,20 +342,18 @@ export default function BattleScreen() {
             </View>
 
             <View style={s.idleContent}>
-                {/* Ícone VS */}
                 <View style={s.vsCircle}>
                     <Text style={s.vsCircleText}>VS</Text>
                 </View>
 
                 <Text style={s.idleTitle}>Arena Pokémon</Text>
-                <Text style={s.idleSub}>Enfrente um treinador aleatório em 3 rounds de duelo de atributos. Vença 3 rounds para capturar um Pokémon!</Text>
+                <Text style={s.idleSub}>Duelo oficial de atributos (HP, ATK, DEF, SP.A, SP.D, VEL). Quem fechar 3 rounds primeiro vence e captura um novo Pokémon!</Text>
 
-                {/* Preview do seu time */}
                 {myTeam.length > 0 && (
                     <>
-                        <Text style={s.sectionLabel}>SEU TIME DISPONÍVEL</Text>
+                        <Text style={s.sectionLabel}>SEUS 5 POKÉMON ESCALADOS</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20 }}>
-                            {myTeam.slice(0, 6).map(p => (
+                            {myTeam.map(p => (
                                 <View key={p.index} style={s.previewCard}>
                                     <Image source={{ uri: p.imagem }} style={s.previewImg} resizeMode="contain" />
                                     <Text style={s.previewName} numberOfLines={1}>{p.nome}</Text>
@@ -321,7 +374,6 @@ export default function BattleScreen() {
         </View>
     );
 
-    // ── SEARCHING ─────────────────────────────────────────────────────────────
     if (state === 'SEARCHING') return (
         <View style={[s.screen, s.centered]}>
             <StatusBar barStyle="light-content" />
@@ -333,11 +385,10 @@ export default function BattleScreen() {
                 </View>
             </Animated.View>
             <Text style={s.searchTitle}>Procurando oponente...</Text>
-            <Text style={s.searchSub}>Aguarde enquanto encontramos um treinador</Text>
+            <Text style={s.searchSub}>Sorteando um rival com 5 Pokémon</Text>
         </View>
     );
 
-    // ── FOUND ─────────────────────────────────────────────────────────────────
     if (state === 'FOUND') return (
         <View style={[s.screen, s.centered]}>
             <StatusBar barStyle="light-content" />
@@ -349,7 +400,7 @@ export default function BattleScreen() {
             <View style={s.foundRow}>
                 <View style={s.foundCard}>
                     {myTeam[0] && <Image source={{ uri: myTeam[0].imagem }} style={s.foundImg} resizeMode="contain" />}
-                    <Text style={[s.foundName, { color: '#EF5350' }]}>VOCÊ</Text>
+                    <Text style={[s.foundName, { color: '#EF5350' }]}>SEU TIME</Text>
                 </View>
 
                 <View style={s.foundDivider} />
@@ -360,11 +411,10 @@ export default function BattleScreen() {
                 </View>
             </View>
 
-            <Text style={s.foundSub}>Batalha começando...</Text>
+            <Text style={s.foundSub}>Sorteando atributos do 1º round...</Text>
         </View>
     );
 
-    // ── BATTLING ──────────────────────────────────────────────────────────────
     if (state === 'BATTLING' && playerFighter && oppFighter) return (
         <View style={s.screen}>
             <StatusBar barStyle="light-content" />
@@ -375,11 +425,10 @@ export default function BattleScreen() {
                 <TouchableOpacity onPress={() => setState('IDLE')} style={s.backBtn}>
                     <Text style={s.backText}>← Fugir</Text>
                 </TouchableOpacity>
-                <Text style={s.headerTitle}>ROUND!</Text>
+                <Text style={s.headerTitle}>ARENA</Text>
                 <View style={{ width: 60 }} />
             </View>
 
-            {/* Placar */}
             <View style={s.scoreboard}>
                 <View style={s.scoreItem}>
                     <Text style={s.scoreLabel}>VOCÊ</Text>
@@ -394,52 +443,49 @@ export default function BattleScreen() {
                 </View>
             </View>
 
-            {/* Stat sorteado */}
-            {chosenStat !== '' && (
+            {chosenStat !== '' ? (
                 <View style={s.statAnnounce}>
-                    <Text style={s.statAnnounceLabel}>⚔️  ATRIBUTO DO ROUND</Text>
+                    <Text style={s.statAnnounceLabel}>⚔️ ATRIBUTO SORTEADO</Text>
                     <Text style={s.statAnnounceVal}>{STAT_LABELS[chosenStat] ?? chosenStat}</Text>
                 </View>
-            )}
-            {chosenStat === '' && (
+            ) : (
                 <View style={s.statAnnounce}>
-                    <Text style={s.statAnnounceLabel}>⚔️  SORTEANDO...</Text>
+                    <Text style={s.statAnnounceLabel}>⚔️ EMBARALHANDO ATRIBUTOS...</Text>
                     <Text style={[s.statAnnounceVal, { color: '#3a5068' }]}>???</Text>
                 </View>
             )}
 
-            {/* Lutadores */}
+            {/* A Arena agora é flex e não deixa a imagem vazar */}
             <View style={s.arenaRow}>
                 <Animated.View style={{ flex: 1, transform: [{ translateX: slideLeft }] }}>
-                    <FighterCard pokemon={playerFighter} side="player"   chosenStat={chosenStat} />
+                    <FighterCard pokemon={playerFighter} side="player" chosenStat={chosenStat} />
                 </Animated.View>
                 <View style={s.arenaVS}>
                     <Text style={s.arenaVSText}>VS</Text>
                 </View>
                 <Animated.View style={{ flex: 1, transform: [{ translateX: slideRight }] }}>
-                    <FighterCard pokemon={oppFighter}    side="opponent" chosenStat={chosenStat} />
+                    <FighterCard pokemon={oppFighter} side="opponent" chosenStat={chosenStat} />
                 </Animated.View>
             </View>
 
-            {/* Log */}
-            <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-                <BattleLog messages={logs} />
-            </View>
-
-            {/* Progresso */}
-            <View style={s.progressRow}>
-                {[0,1,2].map(i => (
-                    <View key={i} style={[s.progressDot, i < playerWins && { backgroundColor: '#EF5350' }]} />
-                ))}
-                <View style={s.progressGap} />
-                {[0,1,2].map(i => (
-                    <View key={i} style={[s.progressDot, i < oppWins && { backgroundColor: '#4FC3F7' }]} />
-                ))}
+            {/* Footer Fixo: O log nunca será esmagado pelas imagens acima */}
+            <View style={s.footerContainer}>
+                <View style={{ marginBottom: 12 }}>
+                    <BattleLog messages={logs} />
+                </View>
+                <View style={s.progressRow}>
+                    {[0, 1, 2].map(i => (
+                        <View key={i} style={[s.progressDot, i < playerWins && { backgroundColor: '#EF5350' }]} />
+                    ))}
+                    <View style={s.progressGap} />
+                    {[0, 1, 2].map(i => (
+                        <View key={i} style={[s.progressDot, i < oppWins && { backgroundColor: '#4FC3F7' }]} />
+                    ))}
+                </View>
             </View>
         </View>
     );
 
-    // ── LOSS ──────────────────────────────────────────────────────────────────
     if (state === 'LOSS') return (
         <View style={[s.screen, s.centered]}>
             <StatusBar barStyle="light-content" />
@@ -448,22 +494,21 @@ export default function BattleScreen() {
 
             <Text style={s.resultEmoji}>😵</Text>
             <Text style={[s.resultTitle, { color: '#EF5350' }]}>DERROTA!</Text>
-            <Text style={s.resultSub}>O rival chegou a 3 vitórias primeiro.</Text>
+            <Text style={s.resultSub}>O rival atingiu o score de 3 vitórias primeiro nesta rodada.</Text>
 
             <View style={s.resultBtns}>
                 <TouchableOpacity style={s.btnPrimary} onPress={startSearch}>
-                    <Text style={s.btnPrimaryText}>⚔️  Revanche</Text>
+                    <Text style={s.btnPrimaryText}>⚔️ Tentar Revanche</Text>
                 </TouchableOpacity>
                 <Link href="/dashboard" asChild>
                     <TouchableOpacity style={s.btnSecondary}>
-                        <Text style={s.btnSecondaryText}>← Pokédex</Text>
+                        <Text style={s.btnSecondaryText}>← Ir para Pokédex</Text>
                     </TouchableOpacity>
                 </Link>
             </View>
         </View>
     );
 
-    // ── REWARD ────────────────────────────────────────────────────────────────
     if (state === 'REWARD') return (
         <View style={[s.screen, s.centered]}>
             <StatusBar barStyle="light-content" />
@@ -478,7 +523,7 @@ export default function BattleScreen() {
                     <View style={s.rewardOrb}>
                         <MiniPokeball size={64} />
                     </View>
-                    <Text style={s.resultSub}>Capturando recompensa...</Text>
+                    <Text style={s.resultSub}>Registrando captura no banco de dados...</Text>
                     <ThrowBall onEnd={() => {}} />
                 </>
             ) : reward ? (
@@ -489,18 +534,18 @@ export default function BattleScreen() {
                         <MiniPokeball size={16} />
                         <Text style={s.rewardBadgeText}>#{reward.index}  ·  {reward.tipos[0]}</Text>
                     </View>
-                    <Text style={[s.resultSub, { marginTop: 4 }]}>Adicionado à sua coleção!</Text>
+                    <Text style={[s.resultSub, { marginTop: 4 }]}>Salvo com sucesso na sua coleção!</Text>
                 </>
             ) : null}
 
             {!throwing && (
                 <View style={s.resultBtns}>
                     <TouchableOpacity style={s.btnPrimary} onPress={startSearch}>
-                        <Text style={s.btnPrimaryText}>⚔️  Nova Batalha</Text>
+                        <Text style={s.btnPrimaryText}>⚔️ Próxima Arena</Text>
                     </TouchableOpacity>
                     <Link href="/dashboard" asChild>
                         <TouchableOpacity style={s.btnSecondary}>
-                            <Text style={s.btnSecondaryText}>← Pokédex</Text>
+                            <Text style={s.btnSecondaryText}>← Voltar à Pokédex</Text>
                         </TouchableOpacity>
                     </Link>
                 </View>
@@ -525,7 +570,6 @@ const s = StyleSheet.create({
 
     sectionLabel: { color: '#3a5068', fontSize: 9, fontWeight: '700', letterSpacing: 3, marginVertical: 12, paddingHorizontal: 20 },
 
-    // IDLE
     idleContent:    { flex: 1, alignItems: 'center', paddingTop: 20 },
     vsCircle:       { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center', marginBottom: 20, backgroundColor: '#EF535018' },
     vsCircleText:   { color: '#EF5350', fontSize: 32, fontWeight: '900', letterSpacing: 4 },
@@ -539,22 +583,19 @@ const s = StyleSheet.create({
     battleStartBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EF5350', borderRadius: 14, paddingVertical: 15, paddingHorizontal: 32, marginTop: 28, shadowColor: '#EF5350', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 10 },
     battleStartText:{ color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 1.5 },
 
-    // SEARCHING
     searchOrb:    { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EF535022', borderWidth: 2, borderColor: '#EF5350', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
     searchOrbText:{ color: '#EF5350', fontSize: 40, fontWeight: '900' },
     searchTitle:  { color: '#e8f0fe', fontSize: 20, fontWeight: '800', marginBottom: 8 },
     searchSub:    { color: '#3a5068', fontSize: 13, textAlign: 'center' },
 
-    // FOUND
     foundVS:     { color: '#EF5350', fontSize: 52, fontWeight: '900', letterSpacing: 8, marginBottom: 32 },
     foundRow:    { flexDirection: 'row', alignItems: 'center', gap: 0 },
-    foundCard:   { alignItems: 'center', width: width * 0.4 },
+    foundCard:   { alignItems: 'center', width: 150 },
     foundImg:    { width: 110, height: 110 },
     foundName:   { fontSize: 13, fontWeight: '900', letterSpacing: 2, marginTop: 8 },
-    foundDivider:{ width: 1, height: 80, backgroundColor: '#1a2235', marginHorizontal: 10 },
+    foundDivider:{ width: 1, height: 80, backgroundColor: '#1a2235', marginHorizontal: 20 },
     foundSub:    { color: '#3a5068', fontSize: 13, marginTop: 32 },
 
-    // BATTLING
     scoreboard:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#080d14', marginHorizontal: 16, borderRadius: 12, borderWidth: 0.5, borderColor: '#0f1e2e', paddingVertical: 12, marginBottom: 8 },
     scoreItem:   { alignItems: 'center', flex: 1 },
     scoreLabel:  { color: '#3a5068', fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 2 },
@@ -566,15 +607,17 @@ const s = StyleSheet.create({
     statAnnounceLabel:{ color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 2 },
     statAnnounceVal: { color: '#e8f0fe', fontSize: 22, fontWeight: '900', letterSpacing: 3 },
 
-    arenaRow:   { flex: 1, flexDirection: 'row', paddingHorizontal: 12, gap: 8, paddingTop: 6 },
+    // Flex container da arena agora se molda dinamicamente, evitando sobreposições
+    arenaRow:   { flex: 1, flexDirection: 'row', paddingHorizontal: 12, gap: 8, paddingTop: 6, marginBottom: 12 },
     arenaVS:    { alignItems: 'center', justifyContent: 'center', width: 28 },
     arenaVSText:{ color: '#1a2235', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 
-    progressRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingBottom: 16, gap: 6 },
+    // O rodapé onde as informações do log aparecem fixadas
+    footerContainer: { paddingHorizontal: 16, paddingBottom: 16, flexShrink: 0 },
+    progressRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
     progressDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#0f1820', borderWidth: 1, borderColor: '#1a2235' },
     progressGap: { width: 20 },
 
-    // RESULT
     resultEmoji: { fontSize: 64, marginBottom: 8 },
     resultTitle: { fontSize: 30, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
     resultSub:   { color: '#3a5068', fontSize: 14, textAlign: 'center', marginBottom: 28, paddingHorizontal: 24 },

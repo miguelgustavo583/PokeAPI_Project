@@ -65,7 +65,7 @@ const FloatingBall = ({ x, size, duration, delay }: { x: string; size: number; d
     return (
         <Animated.View style={[
             fbs.ball,
-            { left: x, width: size, height: size, borderRadius: size / 2 },
+            { left: x as any, width: size, height: size, borderRadius: size / 2 },
             { transform: [{ translateY }, { rotate }], opacity },
         ]}>
             <View style={[fbs.top,    { height: size * 0.38 }]} />
