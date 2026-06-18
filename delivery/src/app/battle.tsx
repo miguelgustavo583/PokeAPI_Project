@@ -48,7 +48,6 @@ const ThrowBall = ({ onEnd }: { onEnd: () => void }) => {
     const spin = useRef(new Animated.Value(0)).current;
     const fade = useRef(new Animated.Value(1)).current;
     
-    // Fallbacks para as animações funcionarem em diversas telas
     const screenW = Dimensions.get('window').width;
     const screenH = Dimensions.get('window').height;
 
@@ -99,7 +98,7 @@ const bl = StyleSheet.create({
     latest: { color: '#e8f0fe', fontWeight: '600', fontSize: 12 },
 });
 
-// ─── Card do lutador (Refatorado para Web/Mobile Responsivo) ──────────────────
+// ─── Card do lutador responsivo ──────────────────────────────────────────────
 const FighterCard = ({
     pokemon, side, chosenStat,
 }: {
@@ -110,7 +109,6 @@ const FighterCard = ({
 
     return (
         <View style={[fc.wrap, { borderColor: color + '44', backgroundColor: color + '10' }]}>
-            {/* O container da imagem absorve o espaço livre, impedindo a imagem de vazar */}
             <View style={fc.imgContainer}>
                 <Image
                     source={{ uri: pokemon.imagem }}
@@ -174,10 +172,9 @@ export default function BattleScreen() {
     const [throwing,       setThrowing]       = useState(false);
     const [userId,         setUserId]         = useState<string | null>(null);
 
-    // Anims
-    const pulseAnim  = useRef(new Animated.Value(1)).current;
     const slideLeft  = useRef(new Animated.Value(-280)).current;
     const slideRight = useRef(new Animated.Value(280)).current;
+    const pulseAnim  = useRef(new Animated.Value(1)).current;
 
     const addLog = (msg: string) => setLogs(prev => [msg, ...prev]);
 
@@ -299,19 +296,22 @@ export default function BattleScreen() {
         updateGlobalStats(false);
     };
 
+    // ── CONFIGURAÇÃO DO POKÉMON ALEATÓRIO NO TIME ──────────────────────────────
     const handleWin = async () => {
         setState('REWARD');
         setThrowing(true);
         updateGlobalStats(true);
 
+        // Garante um Pokémon totalmente randômico independente do rival enfrentado
         const idRecompensa = Math.floor(Math.random() * 151) + 1;
         const pok = await fetchPokemon(idRecompensa);
 
         if (userId) {
             try {
+                // Insere dinamicamente no time oficial do banco via API
                 await addCaptured(userId, idRecompensa);
             } catch (err) {
-                console.log("Erro ao salvar pokemon:", err);
+                console.log("Erro ao salvar pokemon sorteado:", err);
             }
         }
 
@@ -455,7 +455,6 @@ export default function BattleScreen() {
                 </View>
             )}
 
-            {/* A Arena agora é flex e não deixa a imagem vazar */}
             <View style={s.arenaRow}>
                 <Animated.View style={{ flex: 1, transform: [{ translateX: slideLeft }] }}>
                     <FighterCard pokemon={playerFighter} side="player" chosenStat={chosenStat} />
@@ -468,7 +467,6 @@ export default function BattleScreen() {
                 </Animated.View>
             </View>
 
-            {/* Footer Fixo: O log nunca será esmagado pelas imagens acima */}
             <View style={s.footerContainer}>
                 <View style={{ marginBottom: 12 }}>
                     <BattleLog messages={logs} />
@@ -534,7 +532,7 @@ export default function BattleScreen() {
                         <MiniPokeball size={16} />
                         <Text style={s.rewardBadgeText}>#{reward.index}  ·  {reward.tipos[0]}</Text>
                     </View>
-                    <Text style={[s.resultSub, { marginTop: 4 }]}>Salvo com sucesso na sua coleção!</Text>
+                    <Text style={[s.resultSub, { marginTop: 4 }]}>Sorteado com sucesso para a sua coleção!</Text>
                 </>
             ) : null}
 
@@ -607,12 +605,10 @@ const s = StyleSheet.create({
     statAnnounceLabel:{ color: '#EF5350', fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 2 },
     statAnnounceVal: { color: '#e8f0fe', fontSize: 22, fontWeight: '900', letterSpacing: 3 },
 
-    // Flex container da arena agora se molda dinamicamente, evitando sobreposições
     arenaRow:   { flex: 1, flexDirection: 'row', paddingHorizontal: 12, gap: 8, paddingTop: 6, marginBottom: 12 },
     arenaVS:    { alignItems: 'center', justifyContent: 'center', width: 28 },
     arenaVSText:{ color: '#1a2235', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 
-    // O rodapé onde as informações do log aparecem fixadas
     footerContainer: { paddingHorizontal: 16, paddingBottom: 16, flexShrink: 0 },
     progressRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
     progressDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#0f1820', borderWidth: 1, borderColor: '#1a2235' },

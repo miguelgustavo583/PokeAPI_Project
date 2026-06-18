@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Image,
     ScrollView, Dimensions, StatusBar, ActivityIndicator,
 } from 'react-native';
-import { Link, useNavigation } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React from 'react';
@@ -73,7 +73,6 @@ export default function TeamScreen() {
     const [team,    setTeam]    = useState<(TeamPokemon & { tipos: string[] })[]>([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState('');
-    const navigation = useNavigation();
 
     const loadTeam = async () => {
         try {
@@ -83,8 +82,17 @@ export default function TeamScreen() {
             const user   = JSON.parse(raw);
             const userId = user.id ?? user.userId ?? user.user_id;
 
+            // Adicionando bypass de cache com timestamp para forçar a API a devolver os dados em tempo real
             const { data } = await axios.get(`${BASE}/pokemon/v1/team`, {
-                params: { 'user-id': userId },
+                params: { 
+                    'user-id': userId,
+                    '_t': Date.now() 
+                },
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
             });
 
             const teamArray: TeamPokemon[] = Array.isArray(data)
@@ -110,13 +118,12 @@ export default function TeamScreen() {
         }
     };
 
-    // Recarrega o time de forma confiável sempre que a página ganhar foco
-    useEffect(() => {
-        const unsubscribe = navigation.addListener('focus', () => {
+    // useFocusEffect é a maneira oficial do Expo Router de recarregar dados quando a aba ganha foco
+    useFocusEffect(
+        useCallback(() => {
             loadTeam();
-        });
-        return unsubscribe;
-    }, [navigation]);
+        }, [])
+    );
 
     return (
         <View style={s.screen}>
@@ -133,10 +140,10 @@ export default function TeamScreen() {
                 </Link>
             </View>
 
-            {loading ? (
+            {loading && team.length === 0 ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color="#EF5350" />
-                    <Text style={s.loadText}>Carregando time...</Text>
+                    <Text style={s.loadText}>Sincronizando time...</Text>
                 </View>
             ) : error ? (
                 <View style={s.centered}><Text style={s.errorText}>{error}</Text></View>
@@ -154,7 +161,7 @@ export default function TeamScreen() {
                         </View>
                     ) : (
                         <View style={s.grid}>
-                            {team.map((p, i) => <PokemonCard key={i} pokemon={p} />)}
+                            {team.map((p, i) => <PokemonCard key={i + p.name} pokemon={p} />)}
                         </View>
                     )}
                     <View style={{ height: 40 }} />
